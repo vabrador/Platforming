@@ -18,6 +18,8 @@ public class MovingPlatform : MonoBehaviour {
 	public float speedMultiplier = 1F;
 
 	public float initTime = 0F;
+
+	public bool clampAnim01 = true;
 	
 	private float _animTime = 0F;
 
@@ -37,7 +39,9 @@ public class MovingPlatform : MonoBehaviour {
 
 	void Update() {
 		_animTime += Time.deltaTime * speedMultiplier;
-		float animPos = Mathf.Clamp01(moveAnim.Evaluate(_animTime % moveAnim.keys[moveAnim.length-1].time));
+		float animPos = moveAnim.Evaluate(_animTime % moveAnim.keys[moveAnim.length-1].time);
+
+		if (clampAnim01) { animPos = Mathf.Clamp01(animPos); }
 
 		Vector3 origTargetPosPreMove = _origTarget.position;
 		Quaternion origTargetRotPreMove = _origTarget.rotation;
@@ -45,7 +49,7 @@ public class MovingPlatform : MonoBehaviour {
 		Quaternion moveTargetRotPreMove = moveTarget.rotation;
 
 		this.transform.position = Vector3.Lerp(_origTarget.position, moveTarget.position, animPos);
-		this.transform.rotation = Quaternion.Slerp(_origTarget.rotation, moveTarget.rotation, animPos);
+		this.transform.rotation = Quaternion.SlerpUnclamped(_origTarget.rotation, moveTarget.rotation, animPos);
 
 		_origTarget.position = origTargetPosPreMove;
 		_origTarget.rotation = origTargetRotPreMove;

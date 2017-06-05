@@ -46,7 +46,7 @@ public class PlayerController : MonoBehaviour {
 	public bool hasIntendedMovement { get { return _hasIntendedMovement; } }
 
 	private Vector3 _targetForwardRun;
-	public Vector3 targetForwardRun { get {return _targetForwardRun; } }
+	public Vector3 targetRunVector { get {return _targetForwardRun; } }
 
 	private bool _jumpJustPressed = false;
 	private float _lastJumpTimer = 0F;
@@ -70,20 +70,6 @@ public class PlayerController : MonoBehaviour {
 		}
 	}
 
-	void OnDrawGizmos() {
-		// Target facing
-		Gizmos.color = Color.blue;
-		Gizmos.DrawLine(this.transform.position, this.transform.position + targetFacing);
-		Gizmos.DrawCube(this.transform.position + targetFacing, Vector3.one * 0.2F);
-
-		// Current facing
-		Gizmos.DrawCube(this.transform.position + currentFacing * 0.7F, Vector3.one * 0.22F);
-
-		// Target forward run
-		Gizmos.color = Color.red;
-		Gizmos.DrawCube(this.transform.position + targetForwardRun, Vector3.one * 0.25F);
-	}
-
 	#endregion
 
 	#region State
@@ -98,7 +84,7 @@ public class PlayerController : MonoBehaviour {
 	public class GroundingObject {
 		public Transform  transform;
 		public Collider   collider;
-		public Vector3    pointOfContact;
+		public Vector3    contactPoint;
 		public Vector3    contactNormal;
 		public Vector3    positionLastFrame;
 		public Quaternion rotationLastFrame;
@@ -111,11 +97,13 @@ public class PlayerController : MonoBehaviour {
 																																 : transform.rotation; } }
 
 		public GroundingObject(Transform transform,
-													 Collider collider) {
+													 Collider collider,
+													 Vector3 contactPoint,
+													 Vector3 contactNormal) {
 			this.transform = transform;
 			this.collider = collider;
-			this.pointOfContact = Vector3.zero;
-			this.contactNormal = Vector3.zero;
+			this.contactPoint = contactPoint;
+			this.contactNormal = contactNormal;
 			positionLastFrame = Vector3.zero;
 			rotationLastFrame = Quaternion.identity;
 
@@ -173,26 +161,40 @@ public class PlayerController : MonoBehaviour {
 		try {
 			groundingCollidersBuffer = Pool<HashSet<Collider>>.Spawn();
 
-			int numHits = Physics.SphereCastNonAlloc(rigidbody.position - rigidbody.rotation * Vector3.up * (groundCapsule.height / 2F - groundCapsule.radius),
-																							groundCapsule.radius * 0.95F, Vector3.down, _groundRaycastHits, 0.25F, ~0);
+			float radius = groundCapsule.GetWorldRadius();
+			int numHits = Physics.SphereCastNonAlloc(groundCapsule.GetSegmentA(),
+																							radius * 0.80F, Vector3.down,
+																							_groundRaycastHits,
+																							radius * 0.50F, ~0);
 			for (int i = 0; i < numHits; i++) {
 				RaycastHit hit = _groundRaycastHits[i];
 
 				if (!hit.collider.tag.Equals("Player")) {
 					groundingCollidersBuffer.Add(hit.collider);
+					
+					if (hit.point == Vector3.zero) {
+						// Collider was already overlapping the capsule. Calculate a
+						// depenetration ray.
+						Vector3 point, normal;
+						groundCapsule.CalculateDepenetration(hit.collider, out point,
+																															 out normal);
+            hit.point = point;
+						hit.normal = normal;
+					}
 
+					GroundingObject groundingObj;
 					if (!_groundingObjectsMap.ContainsKey(hit.collider)) {
-						GroundingObject newObj = new GroundingObject(hit.transform, hit.collider);
-						newObj.pointOfContact = hit.point;
-						newObj.contactNormal  = hit.normal;
-						_groundingObjectsMap[hit.collider] = newObj;
+						groundingObj = new GroundingObject(hit.transform,
+																							 hit.collider,
+																							 hit.point,
+																							 hit.normal);
 					}
 					else {
-						GroundingObject updatingObj = _groundingObjectsMap[hit.collider];
-						updatingObj.pointOfContact = hit.point;
-						updatingObj.contactNormal  = hit.normal;
-						_groundingObjectsMap[hit.collider] = updatingObj;
+						groundingObj = _groundingObjectsMap[hit.collider];
 					}
+					groundingObj.contactPoint  = hit.point;
+					groundingObj.contactNormal = hit.normal;
+					_groundingObjectsMap[hit.collider] = groundingObj;
 				}
 			}
 
@@ -200,11 +202,9 @@ public class PlayerController : MonoBehaviour {
 			try {
 				groundingObjRemoveBuffer = Pool<List<GroundingObject>>.Spawn();
 
-				foreach (var colliderGroundObjPair in _groundingObjectsMap) {
-					var groundingObject = colliderGroundObjPair.Value;
-
-					if (!groundingCollidersBuffer.Contains(groundingObject.collider)) {
-						groundingObjRemoveBuffer.Add(groundingObject);
+				foreach (var groundingObj in _groundingObjectsMap.GetValuesNonAlloc()) {
+					if (!groundingCollidersBuffer.Contains(groundingObj.collider)) {
+						groundingObjRemoveBuffer.Add(groundingObj);
 					}
 				}
 
@@ -242,6 +242,8 @@ public class PlayerController : MonoBehaviour {
 	public Action<Vector3> OnReferenceFrameTranslated = (v) => { };
 
 	void fixedUpdateAction() {
+    // Linear Velocity //
+
 		// Moving due to moving objects beneath us.
 		Vector3    totalDeltaPosition = Vector3.zero;
 		foreach (var collObjPair in _groundingObjectsMap) {
@@ -263,7 +265,7 @@ public class PlayerController : MonoBehaviour {
 
 		Vector3 targetLinearVelocity;
 		if (hasIntendedMovement) {
-		  targetLinearVelocity = targetForwardRun * Time.fixedDeltaTime * 30F
+		  targetLinearVelocity = targetRunVector * Time.fixedDeltaTime * 30F
 													 * RUN_SPEED;
 		}
 		else {
@@ -276,7 +278,7 @@ public class PlayerController : MonoBehaviour {
 		setLinearVelocity += curVelToTargetVel * Time.fixedDeltaTime * 0.2F
 											* (hasIntendedMovement ? RUN_POWER : STOP_POWER);
 
-		// Jumping
+		// Jumping.
 		if (intendingJump && (isGrounded || _timeSinceLastGrounded < _maxTimeSinceLastGroundedForJump)) {
 			_lastJumpTimer = 0F;
 
@@ -289,8 +291,10 @@ public class PlayerController : MonoBehaviour {
 		// (Consume the jump press.)
     if (_jumpJustPressed) { _jumpJustPressed = false; }
 
-		// (Set linear velocity.)
+		// Set linear velocity.
 		rigidbody.velocity = setLinearVelocity;
+
+    // Angular Velocity //
 
 		// Turning
 		Quaternion uprightingRotation = Quaternion.FromToRotation(rigidbody.rotation * Vector3.up, Vector3.up);
@@ -302,16 +306,47 @@ public class PlayerController : MonoBehaviour {
 	    Quaternion targetRot = Quaternion.LookRotation(targetFacing, Vector3.up);
 			Quaternion curRotToTargetRot = targetRot * Quaternion.Inverse(rigidbody.rotation);
 
-			targetAngularVelocity = curRotToTargetRot.eulerAngles.FlipAnglesAbove180() * Time.fixedDeltaTime
+			targetAngularVelocity = curRotToTargetRot.eulerAngles.FlipAnglesAbove180()
+														* Time.fixedDeltaTime
 														* TURN_POWER;
 		}
 
-		// (Set angular velocity.)
-		rigidbody.angularVelocity = Vector3.Lerp(rigidbody.angularVelocity, targetAngularVelocity, 20F * Time.fixedDeltaTime);
+		// Set angular velocity.
+		rigidbody.angularVelocity = Vector3.Lerp(rigidbody.angularVelocity, targetAngularVelocity,
+																						 20F * Time.fixedDeltaTime);
 	}
 
 	private void onPostPhysics() {
 
+	}
+
+	#endregion
+
+	#region Gizmos
+
+	void OnDrawGizmos() {
+		// Target facing
+		Gizmos.color = Color.blue;
+		Gizmos.DrawLine(this.transform.position, this.transform.position + targetFacing);
+		Gizmos.DrawCube(this.transform.position + targetFacing, Vector3.one * 0.2F);
+
+		// Current facing
+		Gizmos.DrawCube(this.transform.position + currentFacing * 0.7F, Vector3.one * 0.22F);
+
+		// Target run vector
+		Gizmos.color = Color.red;
+		Gizmos.DrawCube(this.transform.position + targetRunVector, Vector3.one * 0.25F);
+
+		// Ground normals
+	  Gizmos.color = Color.blue;
+		if (!isGrounded) Gizmos.color = Color.red;
+		foreach (var groundingObj in _groundingObjectsMap.GetValuesNonAlloc()) {
+			foreach (var orbit in groundingObj.contactPoint.Orbit(axis: groundingObj.contactNormal,
+																														radius: 0.05F,
+																														resolution: 16)) {
+				Gizmos.DrawRay(orbit.position, orbit.axisDir * 3F);
+			}
+		}
 	}
 
 	#endregion
