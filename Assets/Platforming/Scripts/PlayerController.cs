@@ -175,11 +175,10 @@ public class PlayerController : MonoBehaviour {
 					if (hit.point == Vector3.zero) {
 						// Collider was already overlapping the capsule. Calculate a
 						// depenetration ray.
-						Vector3 point, normal;
-						groundCapsule.CalculateDepenetration(hit.collider, out point,
-																															 out normal);
-            hit.point = point;
-						hit.normal = normal;
+						Ray depenetrationRay;
+						depenetrationRay = groundCapsule.CalculateDepenetration(hit.collider);
+            hit.point = depenetrationRay.origin;
+						hit.normal = depenetrationRay.direction.normalized;
 					}
 
 					GroundingObject groundingObj;

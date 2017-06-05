@@ -130,14 +130,26 @@ namespace OmoTools {
       return b;
     }
 
-    public static void CalculateDepenetration(this CapsuleCollider capsule,
-                                              Collider other,
-                                              out Vector3 point,
-                                              out Vector3 normal) {
-      point = Vector3.zero;
-      normal = Vector3.up;
+    /// <summary>
+    /// WARNING: This method is HIGHLY incomplete and will probably give you
+    /// bad results.
+    /// </summary>
+    public static Ray CalculateDepenetration(this CapsuleCollider capsule,
+                                              Collider collider) {
+      Ray depenetration = new Ray();
 
-      // TODO: Implement me!
+      // TODO: THIS IS INVALID FOR GENERAL CAPSULES. (Sphere at A != Capsule)
+      Vector3 a = capsule.GetSegmentA();
+
+      // TODO: Collider needs to use proper calculations, not just transform pos and rot!!
+      // TODO: Also, this method assumes the capsule isn't THAT penetrated.
+      Vector3 closestPointOnCollider = Physics.ClosestPoint(a, collider,
+                                                            collider.transform.position,
+                                                            collider.transform.rotation);
+      depenetration.origin = closestPointOnCollider;
+      depenetration.direction = a - closestPointOnCollider;
+
+      return depenetration;
     }
 
     #endregion
