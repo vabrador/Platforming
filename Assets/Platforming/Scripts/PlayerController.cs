@@ -82,6 +82,7 @@ public class PlayerController : MonoBehaviour {
 	public bool isGrounded { get { return _groundingObjectsMap.Count > 0; } }
 
 	public class GroundingObject {
+		
 		public Transform  transform;
 		public Collider   collider;
 		public Vector3    contactPoint;
@@ -96,7 +97,7 @@ public class PlayerController : MonoBehaviour {
     public Quaternion rotation  { get { return rigidbody != null ? rigidbody.rotation
 																																 : transform.rotation; } }
 
-		public GroundingObject(Transform transform,
+    public void Initialize(Transform transform,
 													 Collider collider,
 													 Vector3 contactPoint,
 													 Vector3 contactNormal) {
@@ -109,6 +110,15 @@ public class PlayerController : MonoBehaviour {
 
 			positionLastFrame = position;
 			rotationLastFrame = rotation;
+		}
+
+		public GroundingObject() { }
+
+		public void Clear() {
+			this.transform = null;
+			this.collider = null;
+			this.contactPoint = Vector3.zero;
+			this.contactNormal = Vector3.up;
 		}
 
 		public void GetPointMovementFromMovementLastFrame(Vector3 point,
@@ -183,10 +193,11 @@ public class PlayerController : MonoBehaviour {
 
 					GroundingObject groundingObj;
 					if (!_groundingObjectsMap.ContainsKey(hit.collider)) {
-						groundingObj = new GroundingObject(hit.transform,
-																							 hit.collider,
-																							 hit.point,
-																							 hit.normal);
+						groundingObj = Pool<GroundingObject>.Spawn();
+						groundingObj.Initialize(hit.transform,
+																		hit.collider,
+																		hit.point,
+																		hit.normal);
 					}
 					else {
 						groundingObj = _groundingObjectsMap[hit.collider];
@@ -209,6 +220,9 @@ public class PlayerController : MonoBehaviour {
 
 				foreach (var toRemove in groundingObjRemoveBuffer) {
 					_groundingObjectsMap.Remove(toRemove.collider);
+
+					toRemove.Clear();
+					Pool<GroundingObject>.Recycle(toRemove);
 				}
 			}
 			finally {
@@ -251,6 +265,9 @@ public class PlayerController : MonoBehaviour {
 			Vector3 deltaPosition;
 			groundingObject.GetPointMovementFromMovementLastFrame(groundCapsule.GetSegmentA(),
 																					 									out deltaPosition);
+      if (groundingObject.rigidbody != null) {
+				deltaPosition *= groundingObject.rigidbody.mass.Map(0F, this.rigidbody.mass * 2F, 0F, 1F);
+			}
       totalDeltaPosition += deltaPosition;
 
 			groundingObject.UpdateLastFramePositionRotation();
@@ -273,6 +290,36 @@ public class PlayerController : MonoBehaviour {
 
 		Vector3 curVelToTargetVel = targetLinearVelocity - rigidbody.velocity;
 		curVelToTargetVel = Vector3.Scale(curVelToTargetVel, new Vector3(1F, 0F, 1F));
+
+		// Just before setting linear velocity, report it to our grounding objects,
+		// applying sheer force in the opposite direction (to account for conservation of momentum)
+		// transverse to the contact normal.
+		// TODO: This should not be force that is copied to each grounding object.
+		foreach (var groundingObj in _groundingObjectsMap.GetValuesNonAlloc()) {
+			if (groundingObj.rigidbody != null && !groundingObj.rigidbody.isKinematic) {
+			  Vector3 contactNormal = groundingObj.contactNormal;
+			  Vector3 playerVelocityDelta = (curVelToTargetVel * 0.5F)
+				  												  + (totalDeltaPosition / Time.fixedDeltaTime);
+			  Vector3 transverseDir = Vector3.Cross(contactNormal, Vector3.Cross(playerVelocityDelta,
+			  																																	 contactNormal)).normalized;
+			  Vector3 transverseDelta = Vector3.Dot(transverseDir, playerVelocityDelta) * transverseDir;
+
+			  Vector3 playerMomentumDelta = transverseDelta * this.rigidbody.mass;
+
+				Vector3 velocityTransfer = playerMomentumDelta / groundingObj.rigidbody.mass;
+				float transferMag = velocityTransfer.magnitude;
+				float maxVelocityTransfer = groundingObj.rigidbody.mass * 2F;
+				if (transferMag > maxVelocityTransfer) {
+					float transferCappingMultiplier = (maxVelocityTransfer / transferMag);
+					velocityTransfer *= transferCappingMultiplier;
+					//curVelToTargetVel *= transferCappingMultiplier;
+				}
+
+				groundingObj.rigidbody.AddForceAtPosition(-velocityTransfer,
+																									groundingObj.contactPoint,
+																									ForceMode.VelocityChange);
+			}
+		}
 
 		setLinearVelocity += curVelToTargetVel * Time.fixedDeltaTime * 0.2F
 											* (hasIntendedMovement ? RUN_POWER : STOP_POWER);
@@ -346,6 +393,12 @@ public class PlayerController : MonoBehaviour {
 				Gizmos.DrawRay(orbit.position, orbit.axisDir * 3F);
 			}
 		}
+
+		// Test on collision enter
+		// Gizmos.color = Color.Lerp(Color.green, Color.black, 0.5F);
+		// foreach (var orbit in _testPos.Orbit(_testVector, 0.05F, 16)) {
+		// 	Gizmos.DrawRay(orbit.position, orbit.axisDir * 3F);
+		// }
 	}
 
 	#endregion
