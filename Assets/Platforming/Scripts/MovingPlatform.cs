@@ -26,6 +26,7 @@ public class MovingPlatform : MonoBehaviour {
 	void Start() {
 		if (_rigidbody == null) _rigidbody = GetComponent<Rigidbody>();
 		rigidbody.isKinematic = true;
+		rigidbody.useGravity = false;
 
 		GameObject origTargetObj = new GameObject("__Original Target Transform__");
 		_origTarget = origTargetObj.transform;
@@ -37,8 +38,8 @@ public class MovingPlatform : MonoBehaviour {
 		_animTime = initTime;
 	}
 
-	void Update() {
-		_animTime += Time.deltaTime * speedMultiplier;
+	void FixedUpdate() {
+		_animTime += Time.fixedDeltaTime * speedMultiplier;
 		float animPos = moveAnim.Evaluate(_animTime % moveAnim.keys[moveAnim.length-1].time);
 
 		if (clampAnim01) { animPos = Mathf.Clamp01(animPos); }
@@ -48,8 +49,14 @@ public class MovingPlatform : MonoBehaviour {
 		Vector3 moveTargetPosPreMove = moveTarget.position;
 		Quaternion moveTargetRotPreMove = moveTarget.rotation;
 
-		this.transform.position = Vector3.Lerp(_origTarget.position, moveTarget.position, animPos);
-		this.transform.rotation = Quaternion.SlerpUnclamped(_origTarget.rotation, moveTarget.rotation, animPos);
+		Vector3    newPos = Vector3.Lerp(_origTarget.position, moveTarget.position, animPos);
+		Quaternion newRot = Quaternion.SlerpUnclamped(_origTarget.rotation, moveTarget.rotation, animPos);
+
+		this.transform.position = newPos;
+		this.transform.rotation = newRot;
+
+		this.rigidbody.position = newPos;
+		this.rigidbody.rotation = newRot;
 
 		_origTarget.position = origTargetPosPreMove;
 		_origTarget.rotation = origTargetRotPreMove;

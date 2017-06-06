@@ -61,6 +61,14 @@ namespace OmoTools {
     }
 
     #endregion
+
+    #region Color
+
+    public static Color SetAlpha(this Color c, float a) {
+      return new Color(c.r, c.g, c.b, a);
+    }
+
+    #endregion
     
     #region CapsuleCollider
 
@@ -157,9 +165,11 @@ namespace OmoTools {
     #region Dictionaries
 
     public struct DictionaryKeyEnumerator<K, V> {
+      private Dictionary<K, V> dict;
       private Dictionary<K, V>.Enumerator enumerator;
 
       public DictionaryKeyEnumerator(Dictionary<K, V> dict) {
+        this.dict = dict;
         enumerator = dict.GetEnumerator();
       }
 
@@ -169,16 +179,25 @@ namespace OmoTools {
       public bool MoveNext() {
         return enumerator.MoveNext();
       }
+
+      public int Count { get { return dict.Count; } }
     }
     
+    
+    /// <summary>
+    /// Normally, iterating over the keys in a Dictionary allocates garbage.
+    /// Using this method instead, you can iterate over a Dictionary's values without allocation.
+    /// </summary>
     public static DictionaryKeyEnumerator<K, V> GetKeysNonAlloc<K, V>(this Dictionary<K, V> dictionary) {
       return new DictionaryKeyEnumerator<K, V>(dictionary);
     }
 
     public struct DictionaryValueEnumerator<K, V> {
+      private Dictionary<K, V> dict;
       private Dictionary<K, V>.Enumerator enumerator;
 
       public DictionaryValueEnumerator(Dictionary<K, V> dict) {
+        this.dict = dict;
         enumerator = dict.GetEnumerator();
       }
 
@@ -188,8 +207,14 @@ namespace OmoTools {
       public bool MoveNext() {
         return enumerator.MoveNext();
       }
+
+      public int Count { get { return dict.Count; } }
     }
     
+    /// <summary>
+    /// Normally, iterating over the values in a Dictionary allocates garbage.
+    /// Using this method instead, you can iterate over a Dictionary's values without allocation.
+    /// </summary>
     public static DictionaryValueEnumerator<K, V> GetValuesNonAlloc<K, V>(this Dictionary<K, V> dictionary) {
       return new DictionaryValueEnumerator<K, V>(dictionary);
     }
