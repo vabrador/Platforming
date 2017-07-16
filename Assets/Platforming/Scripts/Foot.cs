@@ -13,8 +13,15 @@ namespace Platforming {
 		public Vector3 liftedPosition { get { return player.transform.TransformPoint(_baseRelativePosition)
 																								 + Vector3.up * 0.3F; } }
 
+    // Maximum length of armature.
+    public float maxLengthLengthOffset = 0F;
 		private float _maxLegLength;
 		public float maxLegLength { get { return _maxLegLength; } }
+		public Vector3 extendedLegPosition { get { return hipJoint.transform.position - hipJoint.up * maxLegLength; } }
+
+		private float _maxForceMagnitude = 2.0F * Units.N;
+		/// <summary> The maximum linear force this armature can apply in newtons. </summary>
+		public float maxForceMagnitude { get { return _maxForceMagnitude; } }
 
 		public Vector3 hipToFoot { get { return this.transform.position - hipJoint.position; } }
 		
@@ -35,7 +42,7 @@ namespace Platforming {
 
 		private void refreshLegData() {
 			_baseRelativePosition = this.transform.position;
-			_maxLegLength = hipToFoot.magnitude;
+			_maxLegLength = hipToFoot.magnitude + maxLengthLengthOffset;
 		}
 
 		private RaycastHit[] _hitsBuffer = new RaycastHit[32];
@@ -66,6 +73,33 @@ namespace Platforming {
 			return false;
 		}
 
+		private const float MAX_FORCE_INCREASE_PER_FRAME = 0.1F;
+		private const float MAX_FORCE_DECREASE_PER_FRAME = 2F;
+		private Vector3 _lastForce = Vector3.zero;
+		/// <summary>
+		/// Adds a force but caps how much the force the foot can apply from frame to frame.
+		/// WARNING: Calling this method more than once per fixed frame will produce strange
+		/// behaviour!
+		/// </summary>
+		public void AddForce(Rigidbody toBody, Vector3 targetForce, ForceMode forceMode) {
+			Vector3 changeInForce = targetForce - _lastForce;
+			if (changeInForce.magnitude > 0F) {
+				changeInForce = changeInForce.ClampMagnitude(MAX_FORCE_INCREASE_PER_FRAME);
+			}
+			else {
+				changeInForce = changeInForce.ClampMagnitude(MAX_FORCE_DECREASE_PER_FRAME);
+			}
+			Vector3 newForce = _lastForce + changeInForce;
+
+			toBody.AddForce(newForce, forceMode);
+
+			_lastForce = newForce;
+		}
+
+		public void ResetFoot() {
+			_lastForce = Vector3.zero;
+		}
+
 		void OnDrawGizmosSelected() {
 			if (!Application.isPlaying) {
 			  refreshLegData();
@@ -78,9 +112,16 @@ namespace Platforming {
 		}
 
 		void OnDrawGizmos() {
+
+			if (!Application.isPlaying) {
+				// Draw extended leg position
+				Gizmos.color = Color.Lerp(Color.blue, Color.black, 0.5F);
+				Gizmos.DrawWireSphere(extendedLegPosition, 7 * Units.cm);
+			}
 			
 			if (hasContact) {
 				Gizmos.color = Color.blue;
+
 				foreach (var orbit in new Orbit(contactPoint, contactNormal, 0.1F, 8)) {
 					Gizmos.DrawLine(orbit.position, orbit.center + orbit.axisDir * 0.3F);
 				}

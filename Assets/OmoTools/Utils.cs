@@ -54,6 +54,18 @@ namespace OmoTools {
       }
     }
 
+    public static Vector3 ClampMagnitude(this Vector3 v, float maxMagnitude) {
+      float vMag = v.magnitude;
+      if (vMag > maxMagnitude) {
+        v = v * (maxMagnitude / vMag);
+      }
+      return v;
+    }
+
+    #endregion
+
+    #region Vector3 (Euler Angles)
+
     public static Vector3 FlipAnglesAbove180(this Vector3 eulerAngles) {
       return new Vector3(eulerAngles.x > 180F ? -360F + eulerAngles.x : eulerAngles.x,
                         eulerAngles.y > 180F ? -360F + eulerAngles.y : eulerAngles.y,

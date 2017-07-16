@@ -18,6 +18,7 @@ namespace Platforming {
 		#if UNITY_EDITOR
 		new
 		#endif
+		/// <summary> The player's rigidbody. </summary>
 		Rigidbody rigidbody;
 
 		void OnValidate() {
@@ -96,14 +97,18 @@ namespace Platforming {
 
 		public Action<Vector3> OnReferenceFrameTranslated = (v) => { };
 
+		private const float VELOCITY_CORRECTION_COEFF_PER_FRAME = 0.2F;
+
 		private void fixedUpdateAction() {
 
 			Vector3 targetPos = this.rigidbody.position;
 
-			// If we have two feet on the ground, counter gravity.
+			// If we have two feet on the ground, set target position above it.
 			List<Foot> feetOnGround = Pool<List<Foot>>.Spawn();
+			List<Foot> feetNotOnGround = Pool<List<Foot>>.Spawn();
 			foreach (var foot in feet) {
-				if (foot.hasContact) feetOnGround.Add(foot);;
+				if (foot.hasContact) feetOnGround.Add(foot);
+				else { feetNotOnGround.Add(foot); }
 			}
 			if (feetOnGround.Count >= 2) {
 				Vector3 footPosAverage = Vector3.zero;
@@ -115,10 +120,46 @@ namespace Platforming {
 				targetPos = footPosAverage + Vector3.up * 0.7F;
 			}
 
-			Vector3 targetVelocity = (targetPos - this.rigidbody.position) / Time.fixedDeltaTime;
+			// Set target velocity based on target position.
+			Vector3 targetVelocity = this.rigidbody.velocity;
+			Vector3 targetDeltaVelocity = Vector3.zero;
+			if (feetOnGround.Count >= 1) {
+				Vector3 targetDeltaPos = (targetPos - this.rigidbody.position);
+				targetVelocity = targetDeltaPos / Time.fixedDeltaTime / 20F;
+				
+				float distRemaining = targetDeltaPos.magnitude;
+				targetVelocity = targetVelocity * distRemaining.Map(0F, 1F, 0.05F, 1F);
+				targetVelocity = targetVelocity.ClampMagnitude(1F);
+			}
 			Vector3 curVelToTargetVel = targetVelocity - this.rigidbody.velocity;
-			
-			this.rigidbody.AddForce(curVelToTargetVel * 0.1F, ForceMode.VelocityChange);
+
+			// With target velocity change, determine how to apply forces with available feet,
+			// and apply forces per-foot.
+			if (feetOnGround.Count >= 1) {
+				// For now, just try to apply half the force with one foot and half the force with
+				// the other.
+				Vector3 targetDeltaVel = curVelToTargetVel;
+				Vector3 targetTotalForce = targetDeltaVel * this.rigidbody.mass;
+				Vector3 forcePerFoot = targetTotalForce / 2F;
+				foreach (var foot in feetOnGround) {
+					Vector3 forceFromFoot = forcePerFoot.ClampMagnitude(foot.maxForceMagnitude);
+					
+					Vector3 deltaVelocityFromFoot = forceFromFoot / this.rigidbody.mass;
+
+					// Temporary fix for overcorrection forces upon landing
+					float controlCoeff = 1F;
+					if (this.rigidbody.velocity.y >= 0) {
+						controlCoeff = 0.02F;
+					}
+
+					foot.AddForce(this.rigidbody, deltaVelocityFromFoot * controlCoeff, ForceMode.VelocityChange);
+				}
+			}
+
+			foreach (var foot in feetNotOnGround) {
+			  foot.ResetFoot();
+			}
+
 		}
 
 		#endregion
