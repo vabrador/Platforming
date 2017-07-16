@@ -14,14 +14,17 @@ namespace Platforming2 {
 
     [Header("Auto")]
     public Vector3 targetPosition;
+    public float targetGroundHeight;
 
     private void Reset() {
       rigidbody = GetComponent<Rigidbody>();
       foot = FindObjectOfType<Foot>();
+      targetGroundHeight = this.transform.position.y;
     }
 
     private void Start() {
       OmoTools.PhysicsCallbacks.OnPostPhysics += onPostPhysics;
+      targetGroundHeight = this.transform.position.y;
     }
 
     private void onPostPhysics() {
@@ -33,21 +36,42 @@ namespace Platforming2 {
       float horizontalInput = Input.GetAxis("Horizontal");
 
       // Run input
-      Vector3 inputVelocity = Vector3.forward * verticalInput + Vector3.right * horizontalInput;
+      Vector3 inputVelocity = (Vector3.forward * verticalInput + Vector3.right * horizontalInput).ClampMagnitude(1F);
       inputVelocity *= runSpeed;
 
       targetPosition += inputVelocity * Time.deltaTime;
+
+      // Clamp targetPosition's distance from body center
+      Vector3 bodyToTarget =  targetPosition - rigidbody.position;
+      targetPosition = rigidbody.position + bodyToTarget.ClampMagnitude(1F);
     }
 
     private void FixedUpdate() {
       //Vector3 targetVelocity = (targetPosition - rigidbody.position) / Time.fixedDeltaTime;
 
       if (foot.isColliding) {
+        targetPosition.y = targetGroundHeight;
+      }
+      else {
+        targetPosition.y = rigidbody.position.y;
+      }
+
+      if (foot.isColliding) {
         foot.BeginForces();
         foot.ZeroForces();
+
         foot.PushToTarget(targetPosition);
+
+        foot.UpdateTargetPrediction(targetPosition);
+        foot.PushToPredictedTarget();
+
         if ((targetPosition - rigidbody.position).y > 0F) foot.PrioritizeGravity();
+
         foot.ApplyForces();
+      }
+
+      if (Input.GetButtonDown("Jump") && foot.isColliding) {
+        rigidbody.AddForce(Vector3.up * 8F, ForceMode.Impulse);
       }
     }
 

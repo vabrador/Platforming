@@ -99,8 +99,8 @@ namespace Platforming2 {
       return projectBodyVelocity(clampedTotalForce);
     }
 
-    private Vector3 projectBodyPosition() {
-      return body.rigidbody.position + projectBodyVelocity() * Time.fixedDeltaTime;
+    private Vector3 projectBodyPosition(float numFrames = 1F) {
+      return body.rigidbody.position + projectBodyVelocity() * Time.fixedDeltaTime * numFrames;
     }
 
     public void AddVelocity(Vector3 velocity) {
@@ -130,8 +130,31 @@ namespace Platforming2 {
     }
 
     public void PushToTarget(Vector3 targetPosition) {
-      Vector3 projectedPosition = projectBodyPosition();
+      Vector3 projectedPosition = projectBodyPosition(20F);
       AddVelocity((targetPosition - projectedPosition) / Time.fixedDeltaTime);
+    }
+
+    private bool _hasLastTargetPosition = false;
+    private Vector3 _lastTargetPosition;
+    private Vector3 _targetPosition;
+    private Vector3 _predictedTargetPosition;
+
+    public void UpdateTargetPrediction(Vector3 targetPosition) {
+      _targetPosition = targetPosition;
+      if (_hasLastTargetPosition) {
+        Vector3 velocityFromLast = (_targetPosition - _lastTargetPosition) / Time.fixedDeltaTime;
+        _predictedTargetPosition = _targetPosition + velocityFromLast * Time.fixedDeltaTime * 20F;
+      }
+      else {
+        _predictedTargetPosition = _targetPosition;
+      }
+
+      _hasLastTargetPosition = true;
+      _lastTargetPosition = _targetPosition;
+    }
+
+    public void PushToPredictedTarget() {
+      PushToTarget(_predictedTargetPosition);
     }
     
     private const int GRAV_ITERATIONS = 8;
@@ -220,6 +243,17 @@ namespace Platforming2 {
         float fade = (numCones - i) / (float)numCones;
         Gizmos.color = Gizmos.color.WithAlpha(fade * fade * fade);
         GizmoUtil.DrawWireCone(this.transform.position, _gravityCorrectionIterations[i] * 0.05F, footRadius * 0.2F);
+      }
+
+      // Predicted target position
+      Gizmos.color = Color.Lerp(Color.red, Color.blue, 0.3F);
+      int numSpheres = 7;
+      float radius = 0.1F;
+      float radiusStep = 0.1F;
+      for (int i = 0; i < numSpheres; i++) {
+        Gizmos.color = Gizmos.color.WithAlpha((numSpheres - i) / (float)numSpheres);
+        Gizmos.DrawWireSphere(_predictedTargetPosition, radius);
+        radius += radiusStep;
       }
 
       // sheer prevention (projected velocity)
