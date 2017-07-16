@@ -76,7 +76,7 @@ namespace OmoTools {
 
     #region Color
 
-    public static Color SetAlpha(this Color c, float a) {
+    public static Color WithAlpha(this Color c, float a) {
       return new Color(c.r, c.g, c.b, a);
     }
 

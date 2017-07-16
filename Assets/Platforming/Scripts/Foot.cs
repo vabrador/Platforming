@@ -105,7 +105,7 @@ namespace Platforming {
 			  refreshLegData();
 			}
 
-			Gizmos.color = Color.Lerp(Color.green, Color.white, 0.5F).SetAlpha(0.5F);
+			Gizmos.color = Color.Lerp(Color.green, Color.white, 0.5F).WithAlpha(0.5F);
 			foreach (var orbit in new Orbit(hipJoint.position, hipToFoot, 0.05F, 8)) {
 				Gizmos.DrawLine(orbit.position, orbit.position + orbit.axisDir * maxLegLength);
 			}
