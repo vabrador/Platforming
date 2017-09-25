@@ -89,18 +89,28 @@ namespace Platforming2 {
       _totalForce = Vector3.zero;
     }
 
-    private Vector3 projectBodyVelocity(Vector3 appliedForce) {
-      return body.rigidbody.velocity
-           + (appliedForce / body.rigidbody.mass
-              + Physics.gravity) * Time.fixedDeltaTime;
+    private Vector3 projectBodyVelocity(Vector3 appliedForce, int numFrames = 1, Vector3? useVelocity = null, bool ignoreGravity = false) {
+      Vector3 v = useVelocity == null ? body.rigidbody.velocity : useVelocity.GetValueOrDefault();
+      for (int i = 0; i < numFrames; i++) {
+        v = v + (appliedForce / body.rigidbody.mass
+                 + (ignoreGravity ? Vector3.zero : Physics.gravity)) * Time.fixedDeltaTime;
+      }
+      return v;
     }
 
-    private Vector3 projectBodyVelocity() {
-      return projectBodyVelocity(clampedTotalForce);
+    private Vector3 projectBodyVelocity(int numFrames = 1, Vector3? useVelocity = null, bool ignoreGravity = false) {
+      return projectBodyVelocity(clampedTotalForce, numFrames, useVelocity, ignoreGravity);
     }
 
-    private Vector3 projectBodyPosition(float numFrames = 1F) {
-      return body.rigidbody.position + projectBodyVelocity() * Time.fixedDeltaTime * numFrames;
+    private Vector3 projectBodyPosition(int numFrames = 1, bool ignoreGravity = false) {
+      Vector3 p = body.rigidbody.position;
+      Vector3 v = body.rigidbody.velocity;
+      for (int i = 0; i < numFrames; i++) {
+        v = projectBodyVelocity(useVelocity: v, ignoreGravity: ignoreGravity);
+        p = p + v * Time.fixedDeltaTime;
+      }
+
+      return p;
     }
 
     public void AddVelocity(Vector3 velocity) {
@@ -130,7 +140,8 @@ namespace Platforming2 {
     }
 
     public void PushToTarget(Vector3 targetPosition) {
-      Vector3 projectedPosition = projectBodyPosition(20F);
+      // body.rigidbody.velocity.magnitude.Map(0F, 0.1F, 20F, 50F)
+      Vector3 projectedPosition = projectBodyPosition(20, ignoreGravity: false);
       AddVelocity((targetPosition - projectedPosition) / Time.fixedDeltaTime);
     }
 
@@ -143,7 +154,7 @@ namespace Platforming2 {
       _targetPosition = targetPosition;
       if (_hasLastTargetPosition) {
         Vector3 velocityFromLast = (_targetPosition - _lastTargetPosition) / Time.fixedDeltaTime;
-        _predictedTargetPosition = _targetPosition + velocityFromLast * Time.fixedDeltaTime * 20F;
+        _predictedTargetPosition = _targetPosition + velocityFromLast * Time.fixedDeltaTime * 5F;
       }
       else {
         _predictedTargetPosition = _targetPosition;
@@ -176,8 +187,6 @@ namespace Platforming2 {
           _gravityCorrectionIterations[i] = Vector3.zero;
         }
         _correctedThisFrame = false;
-        //Debug.Log("no need to correct, force on gravity normal is " + Vector3.Dot(force, -Physics.gravity.normalized));
-        //Debug.Log("and neg grav mag is " + -Physics.gravity.magnitude);
         return;
       }
       else {

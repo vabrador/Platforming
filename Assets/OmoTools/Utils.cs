@@ -62,6 +62,52 @@ namespace OmoTools {
       return v;
     }
 
+    private const int COVER_ITERATIONS = 8;
+    /// <summary>
+    /// Returns a vector rotated from v that ensures v has an orthogonal component
+    /// that is at least as large as toCover.
+    ///
+    /// For example, if toCover is -Physics.gravity, this function can rotate a
+    /// strong forward force vector to stay mostly forward but also apply enough
+    /// force upwards to counteract gravity.
+    /// </summary>
+    public static Vector3 RotateToEnsureCoverage(Vector3 v, Vector3 toCover) {
+      Vector3 force = v;
+
+      float fixAngle = Vector3.Angle(force, toCover);
+      Vector3 fixAxis = Vector3.Cross(force, toCover).normalized;
+      
+      float gravMag = toCover.magnitude;
+
+      if (Vector3.Dot(force, toCover.normalized) > gravMag * 2F) {
+        return force;
+      }
+      else {
+        Vector3 testForce = force;
+        for (int i = 0; i < COVER_ITERATIONS; i++) {
+          testForce = Quaternion.AngleAxis(fixAngle, fixAxis) * testForce;
+
+          float projectedHeight = Vector3.Dot(testForce, toCover.normalized);
+          if (Vector3.Dot(testForce, toCover.normalized) > gravMag * 2F) {
+            // result too large, go the other direction.
+            fixAngle = fixAngle / 2F;
+            if (fixAngle > 0F) {
+              fixAngle = -fixAngle;
+            }
+          }
+          else {
+            // result too small, continue increasing angle.
+            fixAngle = fixAngle / 2F;
+            if (fixAngle < 0F) {
+              fixAngle = -fixAngle;
+            }
+          }
+        }
+
+        return testForce;
+      }
+    }
+
     #endregion
 
     #region Vector3 (Euler Angles)

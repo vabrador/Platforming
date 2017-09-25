@@ -19,12 +19,12 @@ namespace Platforming2 {
     private void Reset() {
       rigidbody = GetComponent<Rigidbody>();
       foot = FindObjectOfType<Foot>();
-      targetGroundHeight = this.transform.position.y;
+      targetGroundHeight = this.transform.position.y - foot.transform.position.y;
     }
 
     private void Start() {
       OmoTools.PhysicsCallbacks.OnPostPhysics += onPostPhysics;
-      targetGroundHeight = this.transform.position.y;
+      targetGroundHeight = this.transform.position.y - foot.transform.position.y;
     }
 
     private void onPostPhysics() {
@@ -50,7 +50,7 @@ namespace Platforming2 {
       //Vector3 targetVelocity = (targetPosition - rigidbody.position) / Time.fixedDeltaTime;
 
       if (foot.isColliding) {
-        targetPosition.y = targetGroundHeight;
+        //targetPosition.y = foot.transform.position.y + targetGroundHeight;
       }
       else {
         targetPosition.y = rigidbody.position.y;
@@ -60,10 +60,12 @@ namespace Platforming2 {
         foot.BeginForces();
         foot.ZeroForces();
 
-        foot.PushToTarget(targetPosition);
+        //foot.PushToTarget(targetPosition);
 
         foot.UpdateTargetPrediction(targetPosition);
-        foot.PushToPredictedTarget();
+        for (int i = 0; i < 20; i++) {
+          foot.PushToPredictedTarget();
+        }
 
         if ((targetPosition - rigidbody.position).y > 0F) foot.PrioritizeGravity();
 
@@ -75,7 +77,7 @@ namespace Platforming2 {
       }
     }
 
-    private void OnDrawGizmos() {
+    private void OnDrawGizmosSelected() {
       Gizmos.color = Color.red;
       float radius = 0.1F;
       float radiusStep = 0.1F;

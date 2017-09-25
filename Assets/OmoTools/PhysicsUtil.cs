@@ -37,10 +37,10 @@ namespace OmoTools {
     private static List<RaycastHit> s_hitResultsBuffer = new List<RaycastHit>();
     private static RaycastHit[] s_hitBuffer = new RaycastHit[16];
 
-    public static List<RaycastHit> Raycast(Ray ray, float maxLength) {
+    public static List<RaycastHit> Raycast(Ray ray, float maxLength, int layerMask = ~0) {
       int numResults;
       do {
-        numResults = Physics.RaycastNonAlloc(ray, s_hitBuffer, maxLength, ~(1 << 8));
+        numResults = Physics.RaycastNonAlloc(ray, s_hitBuffer, maxLength, layerMask);
 
         if (numResults == s_hitBuffer.Length) {
           s_hitBuffer = new RaycastHit[s_hitBuffer.Length * 2];
@@ -54,6 +54,31 @@ namespace OmoTools {
       }
 
       return s_hitResultsBuffer;
+    }
+
+    public static List<RaycastHit> Raycast(Vector3 pos, Vector3 dir, float maxLength, int layerMask = ~0) {
+      return Raycast(new Ray(pos, dir), maxLength, layerMask);
+    }
+
+    public static RaycastHit? RaycastClosest(Ray ray, float maxLength, int layerMask = ~0) {
+      Vector3 pos = ray.origin;
+      RaycastHit closestHit = default(RaycastHit);
+      float closestDist = float.PositiveInfinity;
+      bool hitAnything = false;
+      foreach (var hit in Raycast(ray, maxLength, layerMask)) {
+        hitAnything = true;
+        float testDist = (hit.point - pos).sqrMagnitude;
+        if (testDist < closestDist) {
+          closestHit = hit;
+          closestDist = testDist;
+        }
+      }
+      if (!hitAnything) return null;
+      else return closestHit;
+    }
+
+    public static RaycastHit? RaycastClosest(Vector3 pos, Vector3 dir, float maxLength, int layerMask = ~0) {
+      return RaycastClosest(new Ray(pos, dir), maxLength, layerMask);
     }
 
     #endregion
