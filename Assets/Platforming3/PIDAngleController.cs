@@ -29,7 +29,7 @@ public class PIDAngleController : MonoBehaviour {
 
 		Vector3 currentDir = rigidbody.rotation * Vector3.forward;
 
-		
+    float targetAngleDelta = Vector3.Angle(currentDir, inputDir);
 	}
 
 }
